@@ -1,137 +1,118 @@
-const fs = require('fs');
+const fs = require('fs/promises');
 const path = require('path');
-const distPath = path.join(__dirname, "project-dist")
 
-fs.mkdir(distPath, (err) => {
-    if (err) throw err;
-    console.log("Folder was created");
-});
+const projectDist = path.join(__dirname, 'project-dist');
+const indexFile = path.join(projectDist, 'index.html');
+const templateFile = path.join(__dirname, 'template.html');
+const stylesFile = path.join(projectDist, 'style.css');
+const stylesFolderPath = path.join(__dirname, 'styles');
+const authAssets = path.join(__dirname, 'assets');
+const cloneAssets = path.join(projectDist, 'assets');
+const componentsDir = path.join(__dirname, 'components');
 
-function copyCss(){
-    const devCssPath = path.join(__dirname, "styles");
-    readDir(devCssPath);
+async function createDir() {
+  try {
+    await fs.mkdir(projectDist, { recursive: true });
+    await fs.writeFile(indexFile, '');
+    await fs.writeFile(stylesFile, '');
+  } catch (err) {
+    console.error(err);
+  }
 }
-function readDir(devPath){
-    fs.open(path.join(distPath, 'style.css'), 'w', function (err, file) {
-        if (err) throw err;
-    });
-    fs.readdir(devPath, (err, files) => {
-        if (err) throw err;
-      
-        files.forEach((file) => {
-            readFile(file, devPath);
-        });
-    });
-}
-function readFile(fileName, devPath){
-    let currentFilePath = path.join(devPath, fileName);
-    
-    if (path.extname(fileName) === '.css'){
-        fs.readFile(
-            currentFilePath,
-            "utf-8",
-            (err, data) => {
-              if (err) throw err;
-              writeFile(data);
-            },
-        )
+
+async function cloneDir() {
+  try {
+    const files = await fs.readdir(
+      authAssets,
+      { withFileTypes: true },
+      (files) => files,
+    );
+
+    for (const file of files) {
+      if (file.isFile()) {
+        await fs.copyFile(
+          path.join(authAssets, file),
+          path.join(cloneAssets, file),
+        );
+      } else {
+        const innerFiles = await fs.readdir(
+          path.join(file.path, file.name),
+          (files) => files,
+        );
+        await fs.mkdir(path.join(cloneAssets, file.name), { recursive: true });
+        const cloneInnerDir = path.join(cloneAssets, file.name);
+        const authInnerDir = path.join(authAssets, file.name);
+
+        for (const file of innerFiles) {
+          await fs.copyFile(
+            path.join(authInnerDir, file),
+            path.join(cloneInnerDir, file),
+          );
+        }
+      }
     }
-}
-function writeFile(data){
-    fs.appendFile(
-        path.join(distPath, 'style.css'),
-        data,
-        (err) => {
-          if (err) throw err;
-          console.log("File was modified");
-        },
-    )
+  } catch (err) {
+    console.error(err);
+  }
 }
 
+async function switchTags() {
+  try {
+    const templateFileText = await fs.readFile(templateFile, 'utf8');
+    const templateMatches = templateFileText.match(/{{(.*?)}}/g);
+    const templateParts = templateFileText.split(/{{(.*?)}}/);
+    let newText = '';
 
-async function copyDir(pathName){
-    fs.mkdir(path.join(distPath, pathName), (err) => {
-        if (err) throw err;
-    });
+    for (const part of templateParts) {
+      if (templateMatches.includes(`{{${part}}}`)) {
+        const textPart = await fs.readFile(
+          path.join(componentsDir, `${part}.html`),
+        );
+        newText += textPart;
+      } else {
+        const textPart = part;
+        newText += textPart;
+      }
+    }
 
-    fs.readdir(path.join(__dirname, pathName), (err, files) => {
-        if (err) throw err;
-      
-        files.forEach((file) => {
-            const filePath = path.join(folderPath, file);
-            // const stats = await fs.promises.stat(filePath);
-            if (stats.isFile()) {
-                copyFile(file);
-            }else{
-                copyDir(file)
-            }
-        });
-    });
+    fs.writeFile(indexFile, newText);
+  } catch (err) {
+    console.error(err);
+  }
 }
 
-function copyFile(fileName){
-    let devPath = path.join(__dirname, "assets");
-    let prodPath = path.join(distPath, "assets");
-    fs.copyFile(path.join(devPath, fileName), path.join(prodPath, fileName), (err) => {
-        if (err) {
-          console.error('Error copying file:', err);
-        } else {
-          console.log('File copied successfully!');
-        }
-    });
+async function mergeStyles() {
+  try {
+    const files = await fs.readdir(stylesFolderPath, (files) => files);
+    let newInner = '';
+
+    for (const file of files) {
+      const filePath = path.join(__dirname, file);
+      const fileExt = path.extname(filePath);
+
+      if (fileExt === '.css') {
+        const fileInner = await fs.readFile(
+          path.join(__dirname, 'styles', file),
+          'utf8',
+        );
+        newInner += fileInner;
+      }
+    }
+    fs.writeFile(stylesFile, newInner);
+  } catch (err) {
+    console.error(err);
+  }
 }
 
-function replaceTemplate(){
-    const filePath = path.join(__dirname, 'template.html');
-    const folderPath = path.join(__dirname, 'components');
-
-    let templateHTML
-    fs.readFile(
-        filePath,
-        "utf-8",
-        (err, data) => {
-          if (err) throw err;
-          templateHTML = data;
-        },
-    );
-    let articlesHTML = fs.readFile(
-        path.join(folderPath, 'articles.html'),
-        "utf-8",
-        (err, data) => {
-          if (err) throw err;
-          return data;
-        },
-    );
-    let footerHTML = fs.readFile(
-        path.join(folderPath, 'footer.html'),
-        "utf-8",
-        (err, data) => {
-          if (err) throw err;
-          return data;
-        },
-    );
-    let headerHTML = fs.readFile(
-        path.join(folderPath, 'header.html'),
-        "utf-8",
-        (err, data) => {
-          if (err) throw err;
-          return data;
-        },
-    );
-
-    let updatedData = templateHTML.replace(new RegExp('{{header}}', 'g'), headerHTML);
-    updatedData = updatedData.replace(new RegExp('{{articles}}', 'g'), articlesHTML);
-    updatedData = updatedData.replace(new RegExp('{{footer}}', 'g'), footerHTML);
-
-    fs.writeFile(distPath, updatedData, 'utf8', (err) => {
-        if (err) {
-            console.error(err);
-            return;
-        }
-
-        console.log('Замена успешно выполнена.');
-    });
+async function createPage() {
+  try {
+    await createDir();
+    await cloneDir();
+    switchTags();
+    mergeStyles();
+  } catch (err) {
+    console.error(err);
+  }
 }
-copyCss()
-// copyDir('assets')
-replaceTemplate()
+
+createPage();
