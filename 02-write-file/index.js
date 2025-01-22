@@ -1,25 +1,24 @@
 const fs = require('fs');
 const path = require('path');
-const { stdout, stdin } = process;
+const { stdin, stdout } = process;
 const fileName = '02-write-file.txt';
 
-fs.open(path.join(__dirname, fileName), 'w', function (err, file) {
-    if (err) throw err;
+const filePath = path.join(__dirname, fileName);
+const writableStream = fs.createWriteStream(filePath);
+
+console.log('Enter text: ');
+stdin.on('data', (data) => {
+  if (data.toString().trim().toLowerCase() === 'exit') {
+    endSession();
+  }
+
+  writableStream.write(data);
 });
-stdout.write('Enter text: ');
 
-stdin.on("data", (data) => fs.appendFile(
-    path.join(__dirname, fileName),
-    data,
-    (err) => {
-      if (err) throw err;
-      console.log("The text is recorded in the file, you can add more text: ");
-    },
-));
+process.on('SIGINT', endSession);
 
-process.on("SIGINT", closeInput); 
-
-function closeInput() {
-    stdout.write("Good luck!");
-    process.exit(0);
+function endSession() {
+  stdout.write('\nGood luck!\n');
+  writableStream.end();
+  process.exit();
 }
